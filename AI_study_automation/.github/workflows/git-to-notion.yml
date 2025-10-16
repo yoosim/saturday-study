@@ -1,0 +1,56 @@
+name: Git → Notion (submission)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - "study/**"
+  push:
+    branches: [main]
+    paths:
+      - "study/**"
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect changed paths (PR or Push)
+        id: files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }} --depth=1
+            git fetch origin ${{ github.head_ref }} --depth=1
+            git diff --name-only origin/${{ github.base_ref }}...origin/${{ github.head_ref }} > changed.txt || true
+          else
+            git diff --name-only ${{ github.sha }}~1 ${{ github.sha }} > changed.txt || true
+          fi
+          echo "paths=$(tr '\n' ' ' < changed.txt)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - run: pip install -r AI_study_automation/requirements.txt
+
+      - name: Run git_to_notion
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_SUBMISSIONS_DB_ID: ${{ secrets.NOTION_SUBMISSIONS_DB_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NOTION_DB_URL: ${{ secrets.NOTION_DB_URL }}
+          DEADLINE_HOUR_KST: ${{ secrets.DEADLINE_HOUR_KST }}
+        run: |
+          python -m AI_study_automation.scripts.git_to_notion \
+            --event "${{ github.event_name }}" \
+            --action "${{ github.event.action || '' }}" \
+            --is_merged "${{ github.event.pull_request.merged || false }}" \
+            --pr_title "${{ github.event.pull_request.title || '' }}" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}" \
+            --sha "${{ github.sha }}" \
+            --paths "${{ steps.files.outputs.paths }}" \
+            --pr_url "${{ github.event.pull_request.html_url || '' }}"

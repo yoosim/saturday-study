@@ -1,0 +1,24 @@
+name: Daily attendance (23:59 KST)
+
+on:
+  schedule:
+    - cron: "59 14 * * *"  # 23:59 KST = 14:59 UTC
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.10" }
+      - run: pip install -r AI_study_automation/requirements.txt
+      - name: Run daily attendance
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_SUBMISSIONS_DB_ID: ${{ secrets.NOTION_SUBMISSIONS_DB_ID }}
+          DISCORD_WEBHOOK_URL_REMINDER: ${{ secrets.DISCORD_WEBHOOK_URL_REMINDER }}
+          NOTION_ATTENDANCE_DB_ID: ${{ secrets.NOTION_ATTENDANCE_DB_ID }}   # 없으면 비워둬도 OK
+          MEMBERS_CSV: ${{ secrets.MEMBERS_CSV }}                           # members.json을 안 쓴다면
+        run: |
+          python -m AI_study_automation.scripts.daily_attendance
