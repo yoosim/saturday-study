@@ -22,20 +22,32 @@
 
 ---
 
-## 📂 리포지토리 구조
-code_study/
-├── AI_study_automation/ # 자동화 스크립트
-│ ├── notion_sync/
-│ ├── discord_bot/
-│ └── github_actions/
-├── study/
-│ ├── 팀원1/
-│ ├── 팀원2/
-│ ├── 팀원3/
-│ ├── 팀원4/
-│ └── 팀원5/
-└── README.md
+## 📁 리포지토리 구조
 
+> ⚙️ 전체 구성 개요 — 자동화 + 스터디 코드 + 팀별 폴더 구조  
+> *(각 폴더명 클릭 시 세부 페이지로 연결 예정)*  
+
+```bash
+code_study/
+├── 🧠 AI_study_automation/       # 자동화 스크립트
+│   └── 🧩 scripts/               # 내부 실행 스크립트
+│       ├── 🧱 __init__.py
+│       ├── 🪄 notion_watch.py    → [📘 Notion 연동 코드](./AI_study_automation/notion_sync/)
+│       ├── ⚙️ utils.py
+│       ├── ✅ study_check.py     → [😁 스터디 과제 동기화 코드]()
+│       ├── ⚙️ utils.py
+│       ├── ⏰ weekly_reminder.py → [💬 Discord 리마인드 안내 봇 코드](./AI_study_automation/discord_bot/)
+│       └── 📦 __pycache__/
+│
+├── 🧩 study/                     # 팀별 과제 제출 폴더
+│   ├── 👤 팀원1/ → [🔗 개인 폴더](./study/팀원1/)
+│   ├── 👤 팀원2/ → [🔗 개인 폴더](./study/팀원2/)
+│   ├── 👤 팀원3/ → [🔗 개인 폴더](./study/팀원3/)
+│   ├── 👤 팀원4/ → [🔗 개인 폴더](./study/팀원4/)
+│   └── 👤 팀원5/ → [🔗 개인 폴더](./study/팀원5/)
+│
+└── 🪄 README.md
+```
 
 ---
 
@@ -50,7 +62,7 @@ code_study/
 ## 👥 참여자
 | 이름 | 역할 | GitHub |
 |------|------|---------|
-| 김영신 | 프론트엔드,AI 개발 | [@youngsshi]()
+| 김영신 | 프론트엔드,AI 개발 | [@youngsshi]
 | 심재성 | 컴퓨터비전,백엔드 | ... |
 | 유성미 | 데이터분석,AI 개발 | [@yoosim](https://github.com/yoosim)
 | 정종혁 | AI 개발기획, 개발분야 | ... |

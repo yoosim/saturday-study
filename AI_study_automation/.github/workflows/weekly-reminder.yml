@@ -1,0 +1,21 @@
+name: Weekly Reminder
+on:
+  schedule:
+    - cron: "0 0 * * 3" # 수요일 00:00 UTC = 09:00 KST
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          DISCORD_WEBHOOK_URL_REMINDER: ${{ secrets.DISCORD_WEBHOOK_URL_REMINDER }}
+          ROLE_ID_PROBLEM_SETTER: ${{ secrets.ROLE_ID_PROBLEM_SETTER }}
+        run: python scripts/weekly_reminder.py

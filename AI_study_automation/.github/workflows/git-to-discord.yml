@@ -1,0 +1,39 @@
+name: Git → Discord
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    types: [opened, closed, merged, reopened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EVENT_JSON: ${{ toJson(github.event) }}
+        run: |
+          python - <<'PY'
+          import os, json, requests
+          url = os.environ["DISCORD_WEBHOOK_URL"]
+          ev = json.loads(os.environ["EVENT_JSON"])
+          if "pull_request" in ev:
+              pr = ev["pull_request"]
+              action = ev.get("action")
+              title = pr["title"]
+              author = pr["user"]["login"]
+              html = pr["html_url"]
+              content = f"📥 PR **{title}** by `{author}` ({action})\n{html}"
+          else:
+              head = ev.get("head_commit")
+              if head:
+                  msg = head.get("message","(no message)")
+                  author = (head.get("author") or {}).get("name","unknown")
+                  urlc = head.get("url","")
+                  content = f"📦 Push `{author}`\n{msg}\n{urlc}"
+              else:
+                  content = "📦 Push 이벤트"
+          r = requests.post(url, json={"content": content}, timeout=15)
+          r.raise_for_status()
+          PY
