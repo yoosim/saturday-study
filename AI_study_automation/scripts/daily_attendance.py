@@ -10,7 +10,7 @@ except Exception:
 
 NOTION_API_KEY            = get_env("NOTION_API_KEY")
 NOTION_SUBMISSIONS_DB_ID  = get_env("NOTION_SUBMISSIONS_DB_ID")
-DISCORD_WEBHOOK_URL       = get_env("DISCORD_WEBHOOK_URL_REMINDER")  # 요약은 리마인드 채널로
+DISCORD_WEBHOOK_URL       = get_env("DISCORD_WEBHOOK_NOTION_URL")  # 요약은 노션 채널로
 ATTENDANCE_DB_ID          = get_env("NOTION_ATTENDANCE_DB_ID", "")   # 선택(없으면 기록 스킵)
 MEMBERS_MAP_PATH          = os.path.join(os.path.dirname(__file__), "..", "config", "members.json")
 

@@ -1,0 +1,9 @@
+# Python 가상환경
+.venv/
+venv/
+env/
+ENV/
+
+
+# Env file
+.env

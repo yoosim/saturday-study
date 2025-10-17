@@ -15,7 +15,7 @@ except Exception:
 NOTION_API_KEY            = get_env("NOTION_API_KEY")
 NOTION_DATABASE_ID_PROB   = get_env("NOTION_DATABASE_ID")                 # 문제 DB
 NOTION_SUBMISSIONS_DB_ID  = get_env("NOTION_SUBMISSIONS_DB_ID")           # 제출 로그 DB
-DISCORD_WEBHOOK_URL       = get_env("DISCORD_WEBHOOK_URL")                # 제출 누적 알림 채널
+DISCORD_WEBHOOK_URL       = get_env("DISCORD_WEBHOOK_GIT_URL")                # 제출 누적 알림 채널
 NOTION_DB_URL             = get_env("NOTION_DB_URL", "")
 DEADLINE_HOUR_KST         = int(os.environ.get("DEADLINE_HOUR_KST", "23"))
 
