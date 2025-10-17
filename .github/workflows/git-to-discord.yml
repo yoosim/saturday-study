@@ -21,13 +21,28 @@ jobs:
        github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: Post to Discord (git card)
         env:
-          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_GIT_URL }}   # ← 깃 알림 채널 웹훅
-        shell: bash
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_GIT_URL }}   # ← 깃 알림 채널 웹훅 (오타 주의!)
         run: |
-          CONTENT="📦 ${GITHUB_EVENT_NAME} on \`${GITHUB_REF_NAME}\` by **${{ github.actor }}**"
-          LINK="${{ github.event.pull_request.html_url || github.event.head_commit.url || github.event.compare }}"
-          # 줄바꿈 포함 JSON 안전 전송
-          PAYLOAD=$(jq -n --arg content "$CONTENT" --arg link "$LINK" '{content: ($content + "\n" + $link)}')
-          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK"
+          python - <<'PY'
+          import os, json, requests
+          ev = os.environ.get("GITHUB_EVENT_NAME","")
+          ref = os.environ.get("GITHUB_REF_NAME","")
+          actor = os.environ.get("GITHUB_ACTOR","")
+          pr_url = os.environ.get("GITHUB_EVENT_PULL_REQUEST_HTML_URL","")
+          # github.* 컨텍스트는 env로 직접 안 들어오므로 아래 3줄로 최대한 포괄
+          link = os.environ.get("GITHUB_SERVER_URL","") + "/" + os.environ.get("GITHUB_REPOSITORY","")
+          # 우선순위: PR 링크 > compare 링크 > repo 링크
+          compare = os.environ.get("GITHUB_EVENT_COMPARE","")
+          if compare: link = compare
+          if pr_url: link = pr_url
+          content = f"📦 {ev} on `{ref}` by **{actor}**\n{link}"
+          r = requests.post(os.environ["WEBHOOK"], json={"content": content}, timeout=20)
+          print("status:", r.status_code, r.text[:200])
+          r.raise_for_status()
+          PY

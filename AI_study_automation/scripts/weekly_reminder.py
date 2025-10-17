@@ -1,17 +1,42 @@
-# scripts/weekly_reminder.py
+# -*- coding: utf-8 -*-
+"""
+매주 수요일(KST 09:00) 문제 제출 리마인드
+- 이번 주 'Week' 기간에 해당하는 카드의 Submitter/Next Submitters를 읽어
+  Discord 채널에 멘션과 함께 리마인드 메시지 전송
+
+필요 ENV (.env 또는 GitHub Secrets → GitHub Actions env로 전달)
+- NOTION_API_KEY
+- NOTION_DATABASE_ID
+- DISCORD_WEBHOOK_URL_REMINDER   # YAML에서 secrets.DISCORD_WEBHOOK_NOTION_URL을 여기에 매핑
+- NOTION_DB_URL                  # (선택) 노션 보드 링크
+- ROLE_ID_PROBLEM_SETTER         # (선택) 역할 멘션 ID
+
+실행 예)
+python -m AI_study_automation.scripts.weekly_reminder
+"""
+
 import os, json, requests
 from datetime import datetime, timedelta, timezone
 from typing import List, Tuple
-from scripts.utils import get_env, post_discord, KST
+
+# utils 모듈: get_env(key, default=None), post_discord(url, content=..., **kwargs), KST(tzinfo)
+try:
+    from AI_study_automation.scripts.utils import get_env, post_discord, KST
+except Exception:
+    from scripts.utils import get_env, post_discord, KST
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ENV & CONSTANTS
 # ──────────────────────────────────────────────────────────────────────────────
 NOTION_API_KEY       = get_env("NOTION_API_KEY")
 NOTION_DATABASE_ID   = get_env("NOTION_DATABASE_ID")
+
+# YAML에서 secrets.DISCORD_WEBHOOK_NOTION_URL → DISCORD_WEBHOOK_URL_REMINDER로 매핑해 전달
 DISCORD_WEBHOOK_URL  = get_env("DISCORD_WEBHOOK_URL_REMINDER")
-NOTION_DB_URL        = os.environ.get("NOTION_DB_URL", "")
-ROLE_ID              = os.environ.get("ROLE_ID_PROBLEM_SETTER")  # 선택
+
+NOTION_DB_URL        = get_env("NOTION_DB_URL", "")
+ROLE_ID              = get_env("ROLE_ID_PROBLEM_SETTER")  # 선택
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_API_KEY}",
@@ -19,22 +44,25 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
-MEMBERS_MAP_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "members.json")
+# members.json: {"홍길동":"123456789012345678", "Alice":"2345..."}
+MEMBERS_MAP_PATH = os.path.realpath(
+    os.path.join(os.path.dirname(__file__), "..", "config", "members.json")
+)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────────────────────
-def iso_utc(dt): 
+def iso_utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
-def rich_text_to_str(rt):
-    if not rt: 
+def rich_text_to_str(rt) -> str:
+    if not rt:
         return ""
     return "".join([b.get("plain_text","") for b in rt])
 
 def uniq_preserve(seq: List[str]) -> List[str]:
-    seen = set()
-    out = []
+    seen, out = set(), []
     for s in seq:
         if s not in seen:
             seen.add(s); out.append(s)
@@ -55,17 +83,38 @@ def load_member_map() -> dict:
 def names_to_user_ids(names: List[str], name2id: dict) -> List[str]:
     ids = []
     for n in names:
-        k = n.strip().lower()
+        k = (n or "").strip().lower()
         if k and (k in name2id):
             ids.append(name2id[k])
     return uniq_preserve(ids)
+
+def send_discord(content: str, allowed_mentions: dict | None = None):
+    """
+    post_discord 유틸이 allowed_mentions를 지원하지 않을 수 있어 직접 호출을 래핑.
+    utils.post_discord가 allowed_mentions를 지원한다면 그걸 써도 무방.
+    """
+    if not DISCORD_WEBHOOK_URL:
+        raise RuntimeError("Missing DISCORD_WEBHOOK_URL_REMINDER")
+    payload = {"content": content}
+    if allowed_mentions is not None:
+        payload["allowed_mentions"] = allowed_mentions
+    r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=20)
+    if r.status_code >= 400:
+        print("[DISCORD][ERROR]", r.status_code, r.text)
+    r.raise_for_status()
+    print("[DISCORD] reminder sent:", r.status_code)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # NOTION
 # ──────────────────────────────────────────────────────────────────────────────
 def query_this_week_submitters_and_next() -> Tuple[List[str], List[str]]:
+    """
+    이번 주(월 00:00 ~ 다음 주 월 00:00, KST 기준)의 카드에서
+    Submitter, Next Submitters(둘 다 rich_text, 쉼표 구분)를 수집
+    """
     now = datetime.now(KST)
-    # 이번 주: 월 00:00 ~ 다음 주 월 00:00
+    # 이번 주: 월요일 00:00
     start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     end   = start + timedelta(days=7)
 
@@ -81,7 +130,7 @@ def query_this_week_submitters_and_next() -> Tuple[List[str], List[str]]:
     }
     r = requests.post(url, headers=HEADERS, json=payload, timeout=20)
     if r.status_code >= 400:
-        print("[NOTION][ERROR]", r.status_code, r.text)
+        print("[NOTION][ERROR]", r.status_code, r.text[:300])
     r.raise_for_status()
     results = r.json().get("results", [])
 
@@ -90,42 +139,48 @@ def query_this_week_submitters_and_next() -> Tuple[List[str], List[str]]:
 
     for p in results:
         props = p.get("properties", {})
-        # Submitter(Text)
+        # Submitter(Text rich_text)
         sub = rich_text_to_str(props.get("Submitter", {}).get("rich_text", []))
         submitters.extend(split_csv(sub))
 
-        # (옵션) Next Submitters(Text)
+        # (옵션) Next Submitters(Text rich_text)
         ns  = rich_text_to_str(props.get("Next Submitters", {}).get("rich_text", []))
         next_submitters.extend(split_csv(ns))
 
-    submitters      = uniq_preserve(submitters)
-    next_submitters = uniq_preserve(next_submitters)
-    return submitters, next_submitters
+    return uniq_preserve(submitters), uniq_preserve(next_submitters)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
+    # 필수 ENV 검증
+    missing = []
+    if not NOTION_API_KEY:     missing.append("NOTION_API_KEY")
+    if not NOTION_DATABASE_ID: missing.append("NOTION_DATABASE_ID")
+    if not DISCORD_WEBHOOK_URL:missing.append("DISCORD_WEBHOOK_URL_REMINDER")
+    if missing:
+        raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
+
     submitters, next_submitters = query_this_week_submitters_and_next()
 
     if not submitters:
+        # 이번 주 카드가 없으면 간단 알림
         post_discord(DISCORD_WEBHOOK_URL, content="🔔 이번 주 문제 카드가 없습니다. 확인 부탁드려요!")
         return
 
-    # 디스코드 멘션(개인)
+    # 멘션 구성
     name2id = load_member_map()
     user_ids = names_to_user_ids(submitters, name2id)
     user_mentions = " ".join([f"<@{uid}>" for uid in user_ids])
 
-    # 역할 멘션(보조/폴백)
     role_mention = f"<@&{ROLE_ID}>" if ROLE_ID else "@문제제출자"
 
-    # 본문 구성
+    # 본문
     lines = [
         "🔔 수요일 리마인드",
         "이번 주 문제 제출자 :",
     ]
-    # 표시용 이름(불릿)
     lines += [f"• {n}" for n in submitters]
 
     if NOTION_DB_URL:
@@ -134,32 +189,22 @@ def main():
     if next_submitters:
         lines += ["", f"다음 주 예정 : {', '.join(next_submitters)}"]
 
-    # 마지막 줄: 개인 멘션이 있으면 개인 멘션 + 역할, 없으면 역할만
     if user_mentions:
         lines += ["", f"담당 {user_mentions} 님, 등록/업데이트 부탁드려요!"]
-        # {role_mention}
     else:
         lines += ["", f"담당 {role_mention} 님, 등록/업데이트 부탁드려요!"]
 
     content = "\n".join(lines)
 
-    # 멘션 허용 제어 (users/roles만)
+    # allowed_mentions: 기본 파싱 차단 + 필요한 user/role만 허용
     allowed = {"parse": []}
     if user_ids:
         allowed["users"] = user_ids
     if ROLE_ID:
         allowed["roles"] = [ROLE_ID]
 
-    # 전송
-    r = requests.post(
-        DISCORD_WEBHOOK_URL,
-        json={"content": content, "allowed_mentions": allowed},
-        timeout=20,
-    )
-    if r.status_code >= 400:
-        print("[DISCORD][ERROR]", r.status_code, r.text)
-    r.raise_for_status()
-    print("[DISCORD] reminder sent:", r.status_code)
+    send_discord(content, allowed_mentions=allowed)
+
 
 if __name__ == "__main__":
     main()
