@@ -1,31 +1,33 @@
-name: Git → Discord (only study submissions)
+name: Git → Discord (general git card)
 
 on:
   push:
     branches: [ main ]
     paths:
-      - "study/**"            # 제출 코드에만 반응
-    # 필요하면 무시 목록도 추가 가능
-    # paths-ignore:
-    #   - ".github/**"
-    #   - "AI_study_automation/**"
+      - "study/**"            # 제출 폴더만 알림 (전체 알림 원하면 이 줄 삭제)
   pull_request:
-    types: [ opened, reopened, synchronize, closed ]
+    types: [opened, reopened, synchronize, closed]
     branches: [ main ]
     paths:
       - "study/**"
 
 jobs:
   notify:
-    # PR일 경우에는 "머지된 경우"에만 알림 보내기
+    # PR은 merge된 경우에만 카드 발송 (노이즈 감소)
     if: >
       github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'closed' &&
+       github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     steps:
-      - name: Post to Discord
+      - name: Post to Discord (git card)
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_GIT_URL }}   # ← 깃 알림 채널 웹훅
+        shell: bash
         run: |
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"content\":\"📦 ${GITHUB_EVENT_NAME} on \`${GITHUB_REF_NAME}\` by **${{ github.actor }}**\\n${{ github.event.pull_request.html_url || github.event.compare || github.event.head_commit.url }}\"}" \
-               "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          CONTENT="📦 ${GITHUB_EVENT_NAME} on \`${GITHUB_REF_NAME}\` by **${{ github.actor }}**"
+          LINK="${{ github.event.pull_request.html_url || github.event.head_commit.url || github.event.compare }}"
+          # 줄바꿈 포함 JSON 안전 전송
+          PAYLOAD=$(jq -n --arg content "$CONTENT" --arg link "$LINK" '{content: ($content + "\n" + $link)}')
+          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK"

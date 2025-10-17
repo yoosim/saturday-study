@@ -1,13 +1,13 @@
-name: Git → Notion (submission)
+name: Git → Notion (submission log & daily rollup)
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "study/**"
+      - "study/**"             # 제출 폴더만 반응
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "study/**"
 
@@ -17,8 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Collect changed paths (PR or Push)
+      # 변경 파일 수집 (PR vs push 구분)
+      - name: Collect changed paths
         id: files
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin ${{ github.base_ref }} --depth=1
@@ -28,21 +30,25 @@ jobs:
             git diff --name-only ${{ github.sha }}~1 ${{ github.sha }} > changed.txt || true
           fi
           echo "paths=$(tr '\n' ' ' < changed.txt)" >> $GITHUB_OUTPUT
+          echo "Changed paths:"
+          cat changed.txt || true
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      - run: pip install -r AI_study_automation/requirements.txt
+      - name: Install deps
+        run: pip install -r AI_study_automation/requirements.txt
 
       - name: Run git_to_notion
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-          NOTION_SUBMISSIONS_DB_ID: ${{ secrets.NOTION_SUBMISSIONS_DB_ID }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          NOTION_DB_URL: ${{ secrets.NOTION_DB_URL }}
-          DEADLINE_HOUR_KST: ${{ secrets.DEADLINE_HOUR_KST }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}               # 문제 DB
+          NOTION_SUBMISSIONS_DB_ID: ${{ secrets.NOTION_SUBMISSIONS_DB_ID }}   # 제출 로그 DB
+          NOTION_DB_URL: ${{ secrets.NOTION_DB_URL }}                         # 메시지 하단 링크(선택)
+          DEADLINE_HOUR_KST: ${{ secrets.DEADLINE_HOUR_KST }}                 # 마감 시각(정시, 기본 23)
+          # ← 제출 누적 알림은 NOTION 웹훅 채널로 (문제-공지/제출 누적)
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_NOTION_URL }}
         run: |
           python -m AI_study_automation.scripts.git_to_notion \
             --event "${{ github.event_name }}" \

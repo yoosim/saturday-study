@@ -1,21 +1,30 @@
-name: Weekly Reminder
+name: Weekly Reminder (Wed 09:00 KST)
+
 on:
   schedule:
-    - cron: "0 0 * * 3" # 수요일 00:00 UTC = 09:00 KST
-  workflow_dispatch:
+    - cron: "0 0 * * 3"     # 매주 수요일 00:00 UTC = 09:00 KST
+  workflow_dispatch: {}
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - env:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: pip install -r AI_study_automation/requirements.txt
+
+      - name: Run weekly_reminder
+        env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-          DISCORD_WEBHOOK_URL_REMINDER: ${{ secrets.DISCORD_WEBHOOK_URL_REMINDER }}
+          NOTION_DB_URL: ${{ secrets.NOTION_DB_URL }}
           ROLE_ID_PROBLEM_SETTER: ${{ secrets.ROLE_ID_PROBLEM_SETTER }}
-        run: python scripts/weekly_reminder.py
+          # ← 알림은 NOTION 웹훅 채널로 (문제-공지)
+          DISCORD_WEBHOOK_URL_REMINDER: ${{ secrets.DISCORD_WEBHOOK_NOTION_URL }}
+        run: |
+          python -m AI_study_automation.scripts.weekly_reminder
